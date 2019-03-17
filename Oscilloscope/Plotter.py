@@ -1,26 +1,48 @@
-import serial # import Serial Library
-import numpy  # Import numpy
-import matplotlib.pyplot as plt #import matplotlib library
+import serial
+import matplotlib.pyplot as plt
+from drawnow import *
+import atexit
 
-arduinoData = serial.Serial('COM5', 115200) #Creating our serial object named arduinoData
-cnt=0
- 
-def plotFig(x, y): #Create a function that makes our desired plot
-    plt.plot(x,y)
-    plt.axis([0,1000,0,1025])
-    plt.show()
+ADCconv = 1024
+Vmax    = 5
 
+values = []
+
+plt.ion()
+
+MCU = serial.Serial('COM4', 115200)
+
+def plotValues():
+    plt.title('Arduino Oscilloscope Samples')
+    plt.grid(True)
+    plt.ylabel('Voltages')
+    plt.plot(values, 'rx-', label='Voltages')
+    plt.legend(loc='upper right')
+
+def doAtExit():
+    MCU.close()
+    plt.close()
+
+atexit.register(doAtExit)
+
+#pre-load dummy data
+for i in range(0,250):
+    values.append(0)
     
-voltage = []
-sample = [] 
-while True: # While loop that loops forever
-    arduinoData.readline()
-    arduinoString = arduinoData.readline() #read the line of text from the serial port
-    voltage.append(int(arduinoString))     #Convert first element to integer number and put in voltage list
-    cnt=cnt+0.4                            #losing half the data sampled at 0.2ms to properly sync read time
-    sample.append(cnt)
-    if(cnt>1000):                          #If you make it to 1000ms or more, plot
-        plotFig(sample,voltage)
-        break
 while True:
-    pass                                    #wait for user kill
+    while (MCU.inWaiting()==0):
+        pass
+    msg = MCU.readline()
+
+    #check if valid value can be casted
+    try:
+        valueInInt = int(msg)
+        print(valueInInt)
+        if valueInInt <= 1024:
+            if valueInInt >= 0:
+                voltage = valueInInt/ADCconv*Vmax
+                values.append(voltage)
+                values.pop(0)
+                drawnow(plotValues)
+    except ValueError:
+        print("Cannot cast to int")
